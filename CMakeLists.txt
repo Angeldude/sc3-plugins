@@ -1,9 +1,16 @@
 cmake_minimum_required (VERSION 2.8)
 project (sc3-plugins)
 
-if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/nova-simd/simd_memory.hpp)
-        message(FATAL_ERROR "nova-simd submodule is missing: please run `git submodule init && git submodule update' from the toplevel of your git working tree")
+if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external_libraries/nova-simd/simd_memory.hpp)
+  message(FATAL_ERROR "nova-simd submodule is missing: please run `git submodule init && git submodule update' from the toplevel of your git working tree")
 endif()
+
+if (NOT SYSTEM_STK)
+  if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external_libraries/stk/include/Stk.h)
+    message(FATAL_ERROR "stk submodule is missing: please run `git submodule init && git submodule update' from the toplevel of your git working tree")
+  endif()
+endif()
+
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules
                       ${CMAKE_MODULE_PATH})
@@ -35,6 +42,7 @@ option(IN_PLACE_BUILD "Build and install in cmake build folder" ON)
 option(NOVA_SIMD "Build VBAP with nova-simd support." ON)
 option(CPP11 "Build with c++11." ON)
 option(NATIVE "Optimize for this specific machine." OFF)
+option(SYSTEM_STK "Use STK libraries from system" OFF)
 
 option(NOVA_DISK_IO "Build with Nova's DiskIO UGens. Requires boost source tree, break warranty & eats your children." OFF)
 
@@ -44,7 +52,14 @@ endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
     add_definitions(-fvisibility=hidden)
-
+    IF(NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   -msse -msse2")
+        set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -msse -msse2")
+        if(NOT APPLE AND NOT CMAKE_COMPILER_IS_CLANG)
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpmath=sse")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpmath=sse")
+        endif()
+    endif()
 	if(NATIVE)
 		add_definitions(-march=native)
 	endif()
@@ -56,11 +71,14 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
 		endif()
 	endif()
 endif()
-
+if(MINGW)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mstackrealign")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mstackrealign")
+endif()
 
 if (NOVA_SIMD)
   add_definitions(-DNOVA_SIMD)
-  include_directories(libs/nova-simd)
+  include_directories(external_libraries/nova-simd)
 endif()
 
 # osx `make install' defaults into cmake_build/SC3-plugins directory

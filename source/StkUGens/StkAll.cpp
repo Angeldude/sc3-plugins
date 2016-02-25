@@ -3,7 +3,13 @@
 #define MY_FLOAT float
 
 #include <Skini.h>  // caps
-#include "include/SKINI.msg"
+#ifdef STK_SKINIMSG
+	// STK up to release version 4.5.0
+	#include <SKINI.msg>
+#else
+	// later versions of STK
+	#include <SKINImsg.h>
+#endif
 
 #include <OneZero.h>
 #include <OnePole.h>
@@ -16,7 +22,7 @@
 #include <BandedWG.h>
 #include <BeeThree.h>
 #include <BlowHole.h>
-#include <Bowed.h> // caps
+#include <Bowed.h>
 #include <Clarinet.h>
 #include <Flute.h>
 #include <ModalBar.h>

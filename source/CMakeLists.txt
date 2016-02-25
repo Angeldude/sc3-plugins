@@ -210,15 +210,15 @@ include_directories(DEINDUGens/include)
 BUILD_PLUGIN(JPverb
 "DEINDUGens/JPverbRaw.cpp" 
              "" "JPverb")
-			 set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS SC_FAUST_PREFIX="\"\"") 
-			 set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS mydsp=JPVERB) 
-			 set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS NDEBUG) 
+             set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS SC_FAUST_PREFIX="\"\"") 
+             set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS mydsp=JPVERB) 
+             set_property(TARGET JPverb APPEND PROPERTY COMPILE_DEFINITIONS NDEBUG) 
 BUILD_PLUGIN(Greyhole
 "DEINDUGens/GreyholeRaw.cpp" 
              "" "Greyhole")
-			 set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS SC_FAUST_PREFIX="\"\"") 
-			 set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS mydsp=GREYHOLE) 
-			 set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS NDEBUG) 
+             set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS SC_FAUST_PREFIX="\"\"") 
+             set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS mydsp=GREYHOLE) 
+             set_property(TARGET Greyhole APPEND PROPERTY COMPILE_DEFINITIONS NDEBUG) 
 
 # MembraneUGens
 BUILD_PLUGIN(MembraneUGens "MembraneUGens/Membrane_shape.c;MembraneUGens/Membrane.cpp"
@@ -226,7 +226,7 @@ BUILD_PLUGIN(MembraneUGens "MembraneUGens/Membrane_shape.c;MembraneUGens/Membran
 
 # LadspaUGen
 if(NOT WIN32)
-    BUILD_PLUGIN(LadspaUGen "LadspaUGen/LadspaUGen.cpp;LadspaUGen/search.c" "" "LadspaUGen")
+    BUILD_PLUGIN(LadspaUGen "LadspaUGen/LadspaUGen.cpp;LadspaUGen/search.c" "dl" "LadspaUGen")
     add_executable(ladspalist LadspaUGen/ladspalist.c LadspaUGen/search.c)
     target_link_libraries(ladspalist dl)
 endif()
@@ -237,56 +237,64 @@ BUILD_PLUGIN(OteyPianoUGens "OteyPianoUGens/OteyPiano.cpp;OteyPianoUGens/dwgs.cp
              
 # PitchDetectionUGens
 file(GLOB PitchDetectionSources PitchDetection/*cpp)
+
 if(APPLE)
     set (PitchDetectionLibs "-framework Accelerate")
 else()
+    find_package(FFTW3f)
+    if (!FFTW3F_FOUND)
+        message(SEND_ERROR "Cannot find libfftw3f")
+    endif()
     set (PitchDetectionLibs ${FFTW3F_LIBRARY})
 endif()
 
 BUILD_PLUGIN(PitchDetection "${PitchDetectionSources}"
              "${PitchDetectionLibs}" "PitchDetection")
 
-
-
-if (NOT APPLE)
-    find_package(FFTW3f)
-
-    if (!FFTW3F_FOUND)
-        message(SEND_ERROR "Cannot find libfftw3f")
-    endif()
-
-    include_directories(${FFTW3F_INCLUDE_DIR})
-
-    set_property(TARGET PitchDetection
-        APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_FFTW)
+if (APPLE)
+    set_property(TARGET PitchDetection APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_VDSP)
     if (SUPERNOVA)
-        set_property(TARGET PitchDetection_supernova
-            APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_FFTW)
+        set_property(TARGET PitchDetection_supernova APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_VDSP)
     endif()
 else()
-    set_property(TARGET PitchDetection
-    APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_VDSP)
+    include_directories(${FFTW3F_INCLUDE_DIR})
+    set_property(TARGET PitchDetection APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_FFTW)
     if (SUPERNOVA)
-        set_property(TARGET PitchDetection_supernova
-        APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_VDSP)
+        set_property(TARGET PitchDetection_supernova APPEND PROPERTY COMPILE_DEFINITIONS SC_FFT_FFTW)
     endif()
 endif()
 
 # StkUGens
-file(GLOB STKSources "StkUGens/stk-4.4.2/src/*.cpp")
-file(GLOB UnneededSTKSources "StkUGens/stk-4.4.2/src/Rt*.cpp"
-                             "StkUGens/stk-4.4.2/src/Inet*.cpp"
-                             "StkUGens/stk-4.4.2/src/Socket.cpp"
-                             "StkUGens/stk-4.4.2/src/Tcp*.cpp"
-                             "StkUGens/stk-4.4.2/src/UdpSocket.cpp"
-                             "StkUGens/stk-4.4.2/src/Thread.cpp"
-                             "StkUGens/stk-4.4.2/src/Mutex.cpp"
-)
-list(REMOVE_ITEM STKSources ${UnneededSTKSources})
-include_directories(StkUGens/stk-4.4.2)
-include_directories(StkUGens/stk-4.4.2/include)
-include_directories(StkUGens/stk-4.4.2/src/include)
-BUILD_PLUGIN(StkUGens "StkUGens/StkAll.cpp;${STKSources}" "" "StkUGens")
+if(SYSTEM_STK)
+    find_package(STK)
+    add_definitions(-DSYSTEM_STK)
+    include_directories(${STK_INCLUDE_DIR})
+    if (EXISTS ${STK_INCLUDE_DIR}/SKINI.msg)
+      add_definitions(-DSTK_SKINIMSG)
+    else()
+      if (NOT EXISTS ${STK_INCLUDE_DIR}/SKINImsg.h)
+        message(FATAL_ERROR "Your system's stk library headers are missing the SKINI msg include file. Please read Debian Bug #805549 for more information & a fix. Alternatively, you can build the sc3 plugins without SYSTEM_STK using the included stk library.")
+      endif()
+    endif()
+    BUILD_PLUGIN(StkUGens "StkUGens/StkAll.cpp" ${STK_LIBRARY} "StkUGens")
+    add_subdirectory(StkInst)
+else()
+    add_subdirectory(StkInst)
+    file(GLOB STKSources "../external_libraries/stk/src/*.cpp")
+    file(GLOB UnneededSTKSources "../external_libraries/stk/src/Rt*.cpp"
+                             "../external_libraries/stk/src/Inet*.cpp"
+                             "../external_libraries/stk/src/Socket.cpp"
+                             "../external_libraries/stk/src/Tcp*.cpp"
+                             "../external_libraries/stk/src/UdpSocket.cpp"
+                             "../external_libraries/stk/src/Thread.cpp"
+                             "../external_libraries/stk/src/Mutex.cpp"
+    )
+    list(REMOVE_ITEM STKSources ${UnneededSTKSources})
+    include_directories(../external_libraries/stk)
+    include_directories(../external_libraries/stk/include)
+    include_directories(../external_libraries/stk/src/include)
+    BUILD_PLUGIN(StkUGens "StkUGens/StkAll.cpp;${STKSources}" "" "StkUGens")
+endif()
 
 # NCAnalysisUGens
 file(GLOB NCAnalysisSources NCAnalysisUGens/*cpp)
